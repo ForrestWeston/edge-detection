@@ -10,9 +10,18 @@ import (
 	_ "image/png"
 )
 
+func sameColor(a, b color.Color) bool {
+	r1, g1, b1, a1 := a.RGBA()
+	r2, g2, b2, a2 := b.RGBA()
+	return r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2
+}
+
 type walker struct {
-	objects []*object
-	visited map[image.Point]bool
+	maxSize  image.Point
+	minSize  image.Point
+	objects  []*object
+	explored map[image.Point]bool
+	frontier []image.Point
 }
 
 type object struct {
@@ -58,7 +67,7 @@ func (w *walker) IsVertex(cell image.Point, img image.Image) bool {
 	count := 0
 	x := cell.X
 	y := cell.Y
-	myColor := img.At(x, y)
+	myColor := color.White
 	for i := -1; i < 2; i++ {
 		for j := -1; j < 2; j++ {
 			Maxsize := img.Bounds().Max
@@ -69,7 +78,7 @@ func (w *walker) IsVertex(cell image.Point, img image.Image) bool {
 			if y+i > Maxsize.Y || y+i < Minsize.Y {
 				count++
 			}
-			if myColor != img.At(x+i, y+j) {
+			if sameColor(myColor, img.At(x+i, y+j)) {
 				count++
 			}
 		}
@@ -80,14 +89,33 @@ func (w *walker) IsVertex(cell image.Point, img image.Image) bool {
 	return false
 }
 
-func (w *walker) ExploreObject(o *object, img image.Image) {
-	start := o.Peek()
+func (w *walker) ExploreObject(o *object, img image.Image, loc image.Point) {
+	frontier := []image.Point{}
+	start := loc
 	myColor := o.c
+	Maxsize := img.Bounds().Max
+	//Minsize := img.Bounds().Min
 	x := start.X
 	y := start.Y
 
-	for myColor == img.At(x, y) {
+	for sameColor(myColor, img.At(x, y)) && x < Maxsize.X {
+		w.explored[image.Pt(x, y)] = true
 		x++
+	}
+	x--
+	if w.IsVertex(image.Pt(x, y), img) {
+		//add the vertex to the objects list
+		frontier = append(frontier, image.Pt(x, y))
+	}
+	x = start.X
+	for sameColor(myColor, img.At(x, y)) && y < Maxsize.Y {
+		w.explored[image.Pt(x, y)] = true
+		y++
+	}
+	y--
+	if w.IsVertex(image.Pt(x, y), img) {
+		//add the vertex to the objects list
+		frontier = append(frontier, image.Pt(x, y))
 	}
 }
 
@@ -111,25 +139,31 @@ func main() {
 
 	fmt.Println("image was a ", typ)
 
-	w := new(walker)
+	w := &walker{
+		explored: make(map[image.Point]bool),
+	}
 	size := img.Bounds().Max
 	for x := 0; x < size.X; x++ {
 		for y := 0; y < size.Y; y++ {
 			//assume that white is the background
 			col := img.At(x, y)
 			loc := image.Pt(x, y)
-			w.visited[loc] = true
-			if col != color.White {
+			w.explored[loc] = true
+			if !sameColor(col, color.White) {
 				if w.IsVertex(loc, img) {
+					fmt.Println("Found Vertex", x, y)
 					o := new(object)
 					//add the vertex to the objects list
 					o.Enqueue(loc)
 					o.c = col
-					w.ExploreObject(o, img)
-
+					//increase x look for vert, increase y look for vert
+					w.ExploreObject(o, img, loc)
+					fmt.Println(o.verticies)
 				}
 			}
 		}
 	}
+	fmt.Println(w.NumObjects())
+	fmt.Println(w.objects)
 	return
 }
