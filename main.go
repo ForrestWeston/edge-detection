@@ -10,6 +10,18 @@ import (
 	_ "image/png"
 )
 
+type graph struct {
+	background color.Color
+	elements   []element
+	xBound     int
+	yBound     int
+	NextLabel  int
+}
+
+type element struct {
+	label int
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("please specify an image")
@@ -30,31 +42,111 @@ func main() {
 
 	fmt.Println("image was a ", typ)
 
-	w := &walker{
-		explored: make(map[image.Point]bool),
-	}
 	size := img.Bounds().Max
+	background := color.White
+	g := new(graph)
+	InitalizeGraph(g, img, background)
+	fmt.Println("Graph Initalized")
+
+	//Fist pass over image
 	for x := 0; x < size.X; x++ {
 		for y := 0; y < size.Y; y++ {
-			//assume that white is the background
 			col := img.At(x, y)
-			loc := image.Pt(x, y)
-			w.explored[loc] = true
-			if !sameColor(col, color.White) {
-				if w.IsVertex(loc, img) {
-					fmt.Println("Found Vertex", x, y)
-					o := new(object)
-					//add the vertex to the objects list
-					o.EnqueueVertex(loc)
-					o.c = col
-					//increase x look for vert, increase y look for vert
-					w.ExploreObject(o, img, loc)
-					fmt.Println(o.verticies)
+			if !sameColor(col, background) {
+				neighbors := g.FindNeighbors(x, y)
+
+				if neighbors == nil {
+					index := g.GetElementIndexAt(x, y)
+					g.elements[index].label = g.NextLabel
+					g.NextLabel++
+				} else {
+					L := neighbors
+					index := g.GetElementIndexAt(x, y)
+					g.elements[index] = SelectMin(L)
 				}
+
 			}
 		}
 	}
-	fmt.Println(w.NumObjects())
-	fmt.Println(w.objects)
+
 	return
+}
+
+func InitalizeGraph(g *graph, i image.Image, bg color.Color) {
+
+	g.background = bg
+	g.NextLabel = 0
+	for x := 0; x < g.xBound; x++ {
+		for y := 0; y < g.yBound; y++ {
+			e := new(element)
+			if sameColor(i.At(x, y), g.background) {
+				e.label = 0
+			} else {
+				e.label = 1
+			}
+			g.elements = append(g.elements, *e)
+		}
+	}
+}
+
+func (g *graph) FindNeighbors(x, y int) []element {
+	var neighbors []element
+	elem := g.GetElementAt(x, y)
+
+	if x == 0 && y == 0 {
+		return neighbors
+	}
+	if y == 0 {
+		W := g.GetElementAt(x-1, y)
+		if W.label == elem.label {
+			neighbors = append(neighbors, W)
+		}
+		return neighbors
+	}
+	if x == 0 {
+		N := g.GetElementAt(x, y-1)
+		NE := g.GetElementAt(x+1, y-1)
+		if N.label == elem.label {
+			neighbors = append(neighbors, N)
+		}
+		if NE.label == elem.label {
+			neighbors = append(neighbors, NE)
+		}
+		return neighbors
+	}
+	NW := g.GetElementAt(x-1, y-1)
+	W := g.GetElementAt(x-1, y)
+	N := g.GetElementAt(x, y-1)
+	NE := g.GetElementAt(x+1, y-1)
+	if NW.label == elem.label {
+		neighbors = append(neighbors, NW)
+	}
+	if W.label == elem.label {
+		neighbors = append(neighbors, W)
+	}
+	if N.label == elem.label {
+		neighbors = append(neighbors, N)
+	}
+	if NE.label == elem.label {
+		neighbors = append(neighbors, NE)
+	}
+	return neighbors
+}
+
+func (g *graph) GetElementAt(x, y int) element {
+	return g.elements[g.xBound*x+y]
+}
+
+func (g *graph) GetElementIndexAt(x, y int) int {
+	return g.xBound*x + y
+}
+
+func SelectMin(elems []element) element {
+	e := elems[0]
+	for _, oe := range elems[1:] {
+		if oe.label < e.label {
+			e = oe
+		}
+	}
+	return e
 }
